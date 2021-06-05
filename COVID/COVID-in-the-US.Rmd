@@ -1,0 +1,208 @@
+---
+title: "Safest Areas in the USA from COVID-19"
+author: "Henry Clay Ver Valen"
+date: "June 1, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set()
+options("getSymbols.warning4.0"=FALSE)
+```
+
+## What Were the Safest Places in the USA from COVID-19?
+COVID-19 is a highly contagious and transmissible virus (see the animation [COVID-19 Transmission in New York](#covid_in_ny) below) and because each state had a varied response to the virus, I was curious about what areas of the continental US had the smallest instances of new COVID-19 diagnosis during the pandemic as these might well be the safest areas to be if this virus has a resurgence.
+
+The data I chose to use for this research came from [Johns Hopkins Center for Systems Science and Engineering](https://systems.jhu.edu)'s data set at <https://github.com/CSSEGISandData/COVID-19> which aggregates data from other sources across the USA and its territories at both the state/territory and county/region level.  More information regarding data itself including field descriptions can be found at <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data>.
+
+### Step 1 - Library the necessary packages
+The research requires several packages including plotly which will provide both maps and animation capabilities. If one or more of these packages are not installed, you can install them using the appropriate line below:  
+* install.packages("tidyverse")  
+* install.packages("lubridate")  
+* install.packages("plotly")  
+```{r load_packages, comment = NA, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(lubridate)
+library(plotly)
+```
+
+### Step 2 - Load the data
+The specific Johns Hopkins' data we will use is their time series data and we will load it from their Git repository
+```{r load_case_data, message = FALSE}
+US_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+US_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+```
+
+And the mapping data for the USA as well as New York state will come from plotly.
+```{r create_maps}
+usa_map <- map_data("state") 
+ny_map <- usa_map %>% filter(region == "new york")
+```
+
+### Step 3 - Data manipulation
+The Johns Hopkins data uses the terms "Lat" and "Long_" and the map data uses "lat" and "long". We'll begin by making that uniform.
+```{r rename_columns}
+usa_map <- rename(usa_map, Longitude = long, Latitude = lat)
+ny_map <- rename(ny_map, Longitude = long, Latitude = lat)
+US_cases <- rename(US_cases, Longitude = Long_, Latitude = Lat)
+US_deaths <- rename(US_deaths, Longitude = Long_, Latitude = Lat)
+```
+
+The Johns Hopkins data places each day's data in a new column.  We'll pivot this so that the date becomes a column and transfer the daily data appropriately.
+```{r tidy_US_data}
+US_cases <- US_cases %>% 
+  pivot_longer(cols = -(UID:Combined_Key), 
+               names_to = "date", 
+               values_to = "total_cases")  %>% 
+  select(Admin2:total_cases) %>% 
+  mutate(date = mdy(date))
+
+US_deaths <- US_deaths %>% 
+  pivot_longer(cols = -(UID:Population), 
+               names_to = "date", 
+               values_to = "total_deaths")  %>% 
+  select(Admin2:total_deaths) %>% 
+  mutate(date = mdy(date))
+```
+
+To normalize case and death rates by population, we need the population data which is only available in the Johns Hopkins "deaths" time series, so we'll join the tables.
+```{r join_in_population, comment = NA, message = FALSE, warning = FALSE}
+US_with_pop <- US_cases %>%
+  full_join(US_deaths %>% select(-c(Latitude, Longitude))) 
+  by = c("Admin2", "Province_State", "Country_Region", "Combined_Key", "date")
+```
+
+Manual examination of the Johns Hopkins data showed that some of the spatial data is missing.  We'll remove records that do not have valid spatial data which eliminates approximately 3% of the records.
+```{r remove_invalid_lat_long}
+US_with_pop <- US_with_pop %>% filter(Latitude != 0 | Longitude != 0)
+US_with_pop <- US_with_pop %>% filter(!(is.na(Latitude) | is.na(Longitude)))
+```
+
+To reduce the quantity of data we'll visualize, we'll break the data down to the week.  To facilitate this we'll add a "week_val" date field that contains the first day of the week for that date. 
+```{r by_week}
+US_with_pop <- US_with_pop %>% mutate(week_val = floor_date(date, unit = "week"))
+```
+
+The last week is not a complete week, so to avoid reporting errors at the end of the animations we'll remove the last week and at the same time group the data.  
+**NOTE**: The total_cases and and total_deaths fields summarization use the *max* function and not *sum* as that data is already cumulative and adding them in the summarization would have the effect of over-reporting these figures by approximately 7X.  Instead we use the *max* function to get the greatest number of cases or deaths for any given week.
+```{r summarize_by_state_county, comment = NA, message = FALSE, warning = FALSE}
+US_by_state <- US_with_pop %>% 
+  filter(date < mdy("5/30/2021")) %>%
+  group_by(Admin2, Province_State, Country_Region, Longitude, Latitude, Population, week_val) %>% 
+  summarize(
+    total_cases = max(total_cases), 
+    total_deaths = max(total_deaths) 
+  ) %>% 
+  mutate(cases_per_10K = total_cases * 10000 / Population) %>% 
+  mutate(deaths_per_10K = total_deaths * 10000 / Population) %>% 
+  ungroup()
+```
+
+We'll expand the data by creating columns to track new deaths, new cases, as well as new cases and new deaths per 10,000 people
+```{r new_cases_deaths}
+US_by_state <- US_by_state %>% 
+  mutate(
+    new_cases = total_cases - lag(total_cases), 
+    new_deaths = total_deaths - lag(total_deaths), 
+    new_cases_per_10K = cases_per_10K - lag(cases_per_10K), 
+    new_deaths_per_10K = deaths_per_10K - lag(deaths_per_10K)
+)
+```
+
+And lastly, the new_cases and new_deaths lag causes negative numbers when switching counties, so we'll change those to NA's
+```{r fix_lagged_data}
+US_by_state$new_cases[US_by_state$new_cases < 0] <- NA
+US_by_state$new_deaths[US_by_state$new_deaths < 0] <- NA
+US_by_state$new_cases_per_10K[US_by_state$new_cases_per_10K < 0] <- NA
+```
+
+### Step 4 - Visualizations
+There are two visualizations of the data details and manipulated as described above.
+
+#### <a id="covid_in_ny"></a>COVID-19 Transmission in New York ####
+In order for see how quickly COVID-19 spread, I chose the state of New York to demonstrate it. From the first infections the week of March 1, 2020 it only took 4 weeks for instances of the virus to be diagnosed in every county in the state.  
+**NOTE**: The size of the circles on this map are *not* normalized for population. As a result it follows that the circles on the island of Manhattan are largest as it has the greatest density of people and the highest number of confirmed cases.
+```{r covid_in_ny_map, echo = FALSE, comment = NA, message = FALSE, warning = FALSE}
+ggplotly(ggplot(data = ny_map, mapping = aes(x = Longitude, y = Latitude, group = group)) +
+  geom_polygon(fill = "white", color = "black") +
+  geom_point(
+    data = (
+      US_by_state %>% 
+        filter(Province_State == "New York")
+    ), 
+    aes(
+      x = Longitude, 
+      y = Latitude, 
+      group = NULL, 
+      size = ifelse(total_cases == 0, NA, total_cases), 
+      frame = format(week_val, format="%Y-%m-%d")
+    ) 
+  ) + 
+  scale_x_continuous(labels = NULL) + 
+  scale_y_continuous(labels = NULL) + 
+  theme(
+    legend.position = "none", 
+    axis.text.x = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.text.y = element_blank(), 
+    axis.title.y = element_blank()
+  ) +
+  labs(title = "Total Cases in New York", y = NULL)
+) %>% animation_slider(currentvalue = list(
+    prefix = "Date (year - month - day) ", 
+    font = list(color="black"))
+)
+```
+
+#### New Cases of COVID-19 Across the Continental US ####
+This animation shows the new cases of COVID-19 diagnosed week by week for each county in every state, normalized to a population of 10,000. The states are colored individually to facilitate distinguishing them from one another as during the height of the pandemic it can be difficulty to tell where one ends and the other begins.
+```{r covid_in_USA_map, echo = FALSE, comment = NA, message = FALSE, warning = FALSE}
+ggplotly(ggplot(data = usa_map, mapping = aes(x = Longitude, y = Latitude, group = group)) +
+  geom_polygon(fill = "white", color = "black") +
+  geom_point(
+    data = (
+      US_by_state %>% 
+        filter(Latitude < 51 & Latitude > 26)
+    ), 
+    aes(
+      x = Longitude, 
+      y = Latitude, 
+      group = NULL, 
+      size = ifelse(new_cases_per_10K == 0, NA, new_cases_per_10K), 
+      frame = format(week_val, format="%Y-%m-%d"), 
+      color = Province_State
+    ) 
+  ) + 
+  scale_x_continuous(labels = NULL) + 
+  scale_y_continuous(labels = NULL) + 
+  theme(
+    legend.position = "none", 
+    axis.text.x = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.text.y = element_blank(), 
+    axis.title.y = element_blank()
+  ) +
+  labs(title = "New Cases by County - Normalized to Population of 10,000", y = NULL)
+) %>% animation_slider(currentvalue = list(
+    prefix = "Date (year - month - day) ", 
+    font = list(color="black"))
+)
+```
+
+### Step 5 - Analysis
+From watching the animation, it appeared that the southwestern corner of Utah had almost no new cases of COVID-19 normalized for population after the early stages of the pandemic. This might make sense if there were no major cities in that area, but that is location of Washington County, which has a population of 177,556 and Washington County and includes the city of [Saint George](https://en.wikipedia.org/wiki/St._George,_Utah) which has a population of approximately 90,000. This must be one of the safest places to be if COVID-19 was to make a resurgence!  
+To verify this however, requires further analysis.
+```{r wash_utah_data}
+US_by_state %>% 
+  filter(Province_State == "Utah" & Admin2 == "Washington" & week_val < mdy("5/24/2020")) %>% 
+  select(week_val, Admin2, Province_State, total_cases, total_deaths)
+```
+Looking at the Johns Hopkins data it would appear that after the week of April 12, 2020 that the data, although complete, was inaccurate as neither total cases nor total deaths could ever actually decrease.  To confirm this inaccuracy, I used Google and found [this article](https://www.fox13now.com/news/local-news/rise-in-covid-19-cases-prompts-st-george-city-to-cancel-events-and-tournaments) where the city of Saint George reported 5,555 total cases and 47 deaths as of November 4, 2020!  
+
+### Step 6 - Conclusion and Sources of Bias
+#### Conclusion
+Without much further analysis and the cross-referencing of additional data sources, it is apparent that the above data analysis has not demonstrated that there is any area of the continental US which might be "safer" if there is a resurgence of COVID-19.
+
+#### Sources of Bias
+What surprised me in this analysis is that even data sources as renown as Johns Hopkins cannot be relied upon and as a result may be a source of bias in and of itself. It was only by manual data examination and cross-referencing other data sources that it was determined to be inaccurate for Washington County, Utah. But this also requires us to assume that other numbers in the data may be circumspect.  
+Another source of bias is the assumption that an area with relatively low (normalizaed for poplulation) new infection counts would be "safer".  Although this seems to make intuitive sense, it has not been proven and therefore is also a source of bias.
