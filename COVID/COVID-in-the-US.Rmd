@@ -117,8 +117,8 @@ US_by_state$new_cases_per_10K[US_by_state$new_cases_per_10K < 0] <- NA
 US_by_state$new_deaths_per_10K[US_by_state$new_deaths_per_10K < 0] <- NA
 ```
 
-From the nature of the disease, it would seem that there should a close relationship between the number of new cases and the number of new deaths for any given county. However I thought that someone diagnosed with the disease was unlikely to die the same week as diagnosed, so I experimented with different lag lengths from 0 to 3 weeks and found that new cases from 2 weeks earlier was the best predictor of deaths in the current week.
 ### Step 4 - Modeling
+From the nature of the disease, it would seem that there should a close relationship between the number of new cases and the number of new deaths for any given county. However I thought that someone diagnosed with the disease was unlikely to die the same week as diagnosed, so I experimented with different lag lengths from 0 to 3 weeks and found that new cases from 2 weeks earlier was the best predictor of deaths in the current week.
 ```{r modeling, comment = NA, message = FALSE, warning = FALSE}
 Santa_Clara_County <- US_by_state %>% 
   filter(Province_State == "California" & Admin2 == "Santa Clara")
