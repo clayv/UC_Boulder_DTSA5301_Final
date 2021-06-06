@@ -129,7 +129,6 @@ Santa_Clara_County %>%
   geom_point(aes(x = new_cases, y = new_deaths), color = "blue") +
   geom_line(aes(x = new_cases, y = pred), color = "red") + 
   labs(title = "Predicted Deaths (red) vs. Actual (blue) for Santa Clara County, California", x = "New Cases", y = "Deaths")
-
 ```
 
 ### Step 5 - Visualizations
