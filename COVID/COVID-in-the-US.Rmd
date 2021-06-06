@@ -114,9 +114,25 @@ And lastly, the new_cases and new_deaths lag causes negative numbers when switch
 US_by_state$new_cases[US_by_state$new_cases < 0] <- NA
 US_by_state$new_deaths[US_by_state$new_deaths < 0] <- NA
 US_by_state$new_cases_per_10K[US_by_state$new_cases_per_10K < 0] <- NA
+US_by_state$new_deaths_per_10K[US_by_state$new_deaths_per_10K < 0] <- NA
 ```
 
-### Step 4 - Visualizations
+From the nature of the disease, it would seem that there should a close relationship between the number of new cases and the number of new deaths for any given county. However I thought that someone diagnosed with the disease was unlikely to die the same week as diagnosed, so I experimented with different lag lengths from 0 to 3 weeks and found that new cases from 2 weeks earlier was the best predictor of deaths in the current week.
+### Step 4 - Modeling
+```{r modeling, comment = NA, message = FALSE, warning = FALSE}
+Santa_Clara_County <- US_by_state %>% 
+  filter(Province_State == "California" & Admin2 == "Santa Clara")
+model <- lm(new_deaths ~ lag(new_cases, 2), data=Santa_Clara_County)
+Santa_Clara_County <- Santa_Clara_County %>% mutate(pred = c(NA, NA, NA, predict(model)))
+Santa_Clara_County %>%
+  ggplot() +
+  geom_point(aes(x = new_cases, y = new_deaths), color = "blue") +
+  geom_line(aes(x = new_cases, y = pred), color = "red") + 
+  labs(title = "Predicted Deaths (red) vs. Actual (blue) for Santa Clara County, California", x = "New Cases", y = "Deaths")
+
+```
+
+### Step 5 - Visualizations
 There are two visualizations of the data details and manipulated as described above.
 
 #### <a id="covid_in_ny"></a>COVID-19 Transmission in New York ####
@@ -189,7 +205,7 @@ ggplotly(ggplot(data = usa_map, mapping = aes(x = Longitude, y = Latitude, group
 )
 ```
 
-### Step 5 - Analysis
+### Step 6 - Analysis
 From watching the animation, it appeared that the southwestern corner of Utah had almost no new cases of COVID-19 normalized for population after the early stages of the pandemic. This might make sense if there were no major cities in that area, but that is location of Washington County, which has a population of 177,556 and Washington County and includes the city of [Saint George](https://en.wikipedia.org/wiki/St._George,_Utah) which has a population of approximately 90,000. This must be one of the safest places to be if COVID-19 was to make a resurgence!  
 To verify this however, requires further analysis.
 ```{r wash_utah_data}
@@ -199,7 +215,7 @@ US_by_state %>%
 ```
 Looking at the Johns Hopkins data it would appear that after the week of April 12, 2020 that the data, although complete, was inaccurate as neither total cases nor total deaths could ever actually decrease.  To confirm this inaccuracy, I used Google and found [this article](https://www.fox13now.com/news/local-news/rise-in-covid-19-cases-prompts-st-george-city-to-cancel-events-and-tournaments) where the city of Saint George reported 5,555 total cases and 47 deaths as of November 4, 2020!  
 
-### Step 6 - Conclusion and Sources of Bias
+### Step 7 - Conclusion and Sources of Bias
 #### Conclusion
 Without much further analysis and the cross-referencing of additional data sources, it is apparent that the above data analysis has not demonstrated that there is any area of the continental US which might be "safer" if there is a resurgence of COVID-19.
 
