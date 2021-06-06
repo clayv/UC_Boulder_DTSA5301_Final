@@ -126,8 +126,9 @@ model <- lm(new_deaths ~ lag(new_cases, 2), data=Santa_Clara_County)
 Santa_Clara_County <- Santa_Clara_County %>% mutate(pred = c(NA, NA, NA, predict(model)))
 Santa_Clara_County %>%
   ggplot() +
-  geom_point(aes(x = new_cases, y = new_deaths), color = "blue") +
+  geom_point(aes(x = new_cases, y = new_deaths), color = "blue") + 
   geom_line(aes(x = new_cases, y = pred), color = "red") + 
+  scale_x_log10() + 
   labs(title = "Predicted Deaths (red) vs. Actual (blue) for Santa Clara County, California", x = "New Cases", y = "Deaths")
 ```
 
