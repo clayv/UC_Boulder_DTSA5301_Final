@@ -1,7 +1,7 @@
 ---
 title: "Safest Areas in the USA from COVID-19"
 author: "Henry Clay Ver Valen"
-date: "June 1, 2021"
+date: "June 7, 2021"
 output: html_document
 ---
 
@@ -14,6 +14,9 @@ options("getSymbols.warning4.0"=FALSE)
 COVID-19 is a highly contagious and transmissible virus (see the animation [COVID-19 Transmission in New York](#covid_in_ny) below) and because each state had a varied response to the virus, I was curious about what areas of the continental US had the smallest instances of new COVID-19 diagnosis during the pandemic as these might well be the safest areas to be if this virus has a resurgence.
 
 The data I chose to use for this research came from [Johns Hopkins Center for Systems Science and Engineering](https://systems.jhu.edu)'s data set at <https://github.com/CSSEGISandData/COVID-19> which aggregates data from other sources across the USA and its territories at both the state/territory and county/region level.  More information regarding data itself including field descriptions can be found at <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data>.
+
+### Reproducing this report
+If you would like to reproduce this report the RStudio Rmd file can be found at <https://raw.githubusercontent.com/clayv/UC_Boulder_DTSA5301_Final/main/COVID/COVID-in-the-US.Rmd> which is located in the GitHub repository <https://github.com/clayv/UC_Boulder_DTSA5301_Final/tree/main/COVID>. Before attempting to knit this Rmd file to HTML though, please note that the animations are very large, that it takes 40 minutes to create the report (at least on my computer), and the final size of the resulting HTML file exceeds 70MB.
 
 ### Step 1 - Library the necessary packages
 The research requires several packages including plotly which will provide both maps and animation capabilities. If one or more of these packages are not installed, you can install them using the appropriate line below:  
